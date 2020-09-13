@@ -1,0 +1,189 @@
+// Aggregate Javadocs
+buildscript {
+    repositories { jcenter() }
+    dependencies {
+        classpath 'com.netflix.nebula:gradle-aggregate-javadocs-plugin:2.2.+'
+    }
+}
+
+plugins {
+    id "java"
+    id "jacoco"
+    id "checkstyle"
+    id "org.sonarqube" version "3.0"
+    id "net.ltgt.apt" version "0.21"
+    id "net.ltgt.apt-idea" version "0.21"
+    id "com.github.johnrengelman.shadow" version "6.0.0"
+}
+
+apply plugin: 'nebula-aggregate-javadocs'
+
+def determineBuildVersion = {
+    def buildInfo = new ByteArrayOutputStream()
+    exec {
+        commandLine 'git', 'rev-list', '--count', 'HEAD'
+        standardOutput = buildInfo
+    }
+    // Magic number: git rev-list --count cdb13e3b663b18e3938ad5efc60d165fa9301f6e
+    return Integer.parseInt(buildInfo.toString().replaceAll("[^0-9]", "")) - 3529
+}
+def buildVersion = determineBuildVersion()
+
+allprojects {
+    wrapper.gradleVersion = "6.2.1"
+
+    group "com.djrapitops"
+    version "5.1-SNAPSHOT"
+
+    ext.majorVersion = '5'
+    ext.minorVersion = '1'
+    ext.buildVersion = buildVersion
+    ext.fullVersion = project.ext.majorVersion + '.' + project.ext.minorVersion + ' build ' + project.ext.buildVersion
+
+    // Fix for UTF-8 files showing with wrong encoding when compiled on Windows machines.
+    compileJava { options.encoding = "UTF-8" }
+    tasks.withType(JavaCompile) { options.encoding = 'UTF-8' }
+    javadoc { options.encoding = 'UTF-8' }
+}
+
+println "Building artifact for version $fullVersion"
+
+subprojects {
+    // Build plugins
+    apply plugin: "java"
+    apply plugin: "maven-publish"
+    apply plugin: "net.ltgt.apt"      // Annotation processing plugin
+    apply plugin: "net.ltgt.apt-idea" // Annotation processing IntelliJ IDEA configuration plugin
+    apply plugin: "com.github.johnrengelman.shadow"
+
+    // Report plugins
+    apply plugin: "checkstyle"
+    apply plugin: "jacoco"
+
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+
+    ext.daggerVersion = "2.28.3"
+    ext.daggerCompilerVersion = "2.28.3"
+
+    ext.abstractPluginFrameworkVersion = "3.4.2"
+
+    ext.bukkitVersion = "1.13.2-R0.1-SNAPSHOT"
+    ext.spigotVersion = "1.13.2-R0.1-SNAPSHOT"
+    ext.paperVersion = "1.13.2-R0.1-SNAPSHOT"
+    ext.spongeVersion = "7.1.0"
+    ext.nukkitVersion = "1.0-SNAPSHOT"
+    ext.bungeeVersion = "1.16-R0.3"
+    ext.velocityVersion = "1.0-SNAPSHOT"
+    ext.redisBungeeVersion = "0.3.8-SNAPSHOT"
+
+    ext.httpClientVersion = "4.5.12"
+    ext.commonsTextVersion = "1.9"
+    ext.commonsCompressVersion = "1.20"
+    ext.htmlCompressorVersion = "1.5.2"
+    ext.caffeineVersion = "2.8.0"
+    ext.h2Version = "1.4.199"
+    ext.mysqlVersion = "8.0.21"
+    ext.hikariVersion = "3.4.5"
+    ext.slf4jVersion = "1.7.30"
+    ext.geoIpVersion = "2.14.0"
+    ext.gsonVersion = "2.8.6"
+    ext.guavaVersion = "28.0-jre"
+    ext.bstatsVersion = "1.4"
+    ext.placeholderapiVersion = "2.9.2"
+    ext.nkPlaceholderapiVersion = "1.3-SNAPSHOT"
+
+    repositories {
+        mavenCentral()
+        maven { // Spigot Repository
+            url = "https://hub.spigotmc.org/nexus/content/repositories/snapshots/"
+        }
+        maven { // Paper Repository
+            url = "https://papermc.io/repo/repository/maven-public/"
+        }
+        maven { // Sponge Repository
+            url = "https://repo.spongepowered.org/maven"
+        }
+        maven { // BungeeCord Repository
+            url = "https://oss.sonatype.org/content/repositories/snapshots"
+        }
+        maven { // RedisBungee Repository
+            url = "https://repo.md-5.net/content/repositories/snapshots/"
+        }
+        maven { // Velocity Repository
+            url = "https://repo.velocitypowered.com/snapshots/"
+        }
+        maven { // Nukkit Repository
+            url = "https://repo.nukkitx.com/main"
+        }
+        maven { // bStats Repository
+            url = "https://repo.codemc.org/repository/maven-public"
+        }
+        maven { // Plan Repository
+            url = "https://dl.bintray.com/rsl1122/Plan-repository"
+        }
+    }
+
+    dependencies {
+        // Dependency Injection used across the project
+        compile "com.google.dagger:dagger:$daggerVersion"
+        annotationProcessor "com.google.dagger:dagger-compiler:$daggerCompilerVersion"
+        testAnnotationProcessor "com.google.dagger:dagger-compiler:$daggerCompilerVersion"
+
+        // Test Tooling Dependencies
+        testImplementation 'org.junit.jupiter:junit-jupiter-api:5.6.2'
+        testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.6.2"   // JUnit 5
+        testCompile "org.junit.jupiter:junit-jupiter-params:5.6.2"   // JUnit 5, parameterized tests
+        testCompile "org.mockito:mockito-core:3.5.10"                // Mockito Core
+        testCompile "org.mockito:mockito-junit-jupiter:3.5.10"       // Mockito JUnit 5 Extension
+        testCompile "org.seleniumhq.selenium:selenium-java:3.141.59" // Selenium (Browser tests)
+        testCompile "com.jayway.awaitility:awaitility:1.7.0"         // Awaitility (Concurrent wait conditions)
+
+        // Testing dependencies required by Plan
+        testCompile "org.xerial:sqlite-jdbc:3.32.3.2"     // SQLite
+        testCompile "mysql:mysql-connector-java:$mysqlVersion" // MySQL
+    }
+
+    configurations {
+        testArtifacts.extendsFrom testRuntime
+    }
+    // Test classes available to other modules
+    task testJar(type: Jar) {
+        classifier "test"
+        from sourceSets.test.output
+    }
+    artifacts {
+        testArtifacts testJar
+    }
+
+    test {
+        useJUnitPlatform()
+        testLogging {
+            events "passed", "failed", "skipped"
+            exceptionFormat "full"
+        }
+    }
+
+    checkstyle {
+        getConfigDirectory().set file("$rootProject.projectDir/config/checkstyle")
+    }
+
+    jacocoTestReport {
+        reports {
+            xml.enabled true
+            // xml.destination file("${buildDir}/jacoco/report.xml")
+        }
+    }
+
+    plugins.withType(JacocoPlugin) {
+        tasks["test"].finalizedBy 'jacocoTestReport'
+    }
+}
+
+sonarqube {
+    properties {
+        property "sonar.projectName", "Player Analytics"
+        property "sonar.projectKey", "com.djrapitops:Plan"
+        property "sonar.coverage.jacoco.xmlReportPaths", "**/build/report/jacoco/test/jacocoTestReport.xml"
+    }
+}
